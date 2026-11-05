@@ -1,166 +1,175 @@
-from microbit import *
-import random
-
+# MakeCode Python version: APIs are provided by MakeCode, so no imports are used.
 WIDTH = 5
 HEIGHT = 5
-
-# Locked LEDs use brightness 2; the moving piece uses brightness 1.
-EMPTY_ROW = [0, 0, 0, 0, 0]
+FULL_ROW = 31
 
 
 def start_pressed():
-    """Use the micro:bit V2 touch logo; on V1, start with A+B together."""
-    try:
-        return logo.is_pressed()
-    except (NameError, AttributeError):
-        return button_a.is_pressed() and button_b.is_pressed()
+    # The touch logo is available on micro:bit V2. A+B is the V1 fallback.
+    return input.logo_is_pressed() or (input.button_is_pressed(Button.A) and input.button_is_pressed(Button.B))
 
 
-def wait_for_start():
-    display.show(Image("00000:00900:09990:00900:00900"))
-    while not start_pressed():
-        sleep(30)
-    sleep(250)
-    while start_pressed():
-        sleep(30)
+def show_start_prompt():
+    basic.show_leds("""
+. . # . .
+. # # # .
+. . # . .
+. . # . .
+. . # . .
+""")
 
 
-def draw(board, piece=None, piece_x=0, piece_y=0):
-    display.clear()
+def occupied(board, x, y):
+    if x < 0 or x >= WIDTH or y >= HEIGHT:
+        return True
+    if y < 0:
+        return False
+    return (board[y] // (2 ** x)) % 2 == 1
+
+
+def can_place(board, kind, px, py):
+    if occupied(board, px, py):
+        return False
+    if kind == 1 and occupied(board, px + 1, py):
+        return False
+    if kind == 2 and occupied(board, px, py + 1):
+        return False
+    return True
+
+
+def draw_board(board, kind, px, py):
+    led.clear()
     for y in range(HEIGHT):
         for x in range(WIDTH):
-            if board[y][x]:
-                display.set_pixel(x, y, 2)
+            if occupied(board, x, y):
+                led.plot_brightness(x, y, 100)
 
-    if piece is not None:
-        for dx, dy in piece:
-            x = piece_x + dx
-            y = piece_y + dy
-            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-                display.set_pixel(x, y, 1)
+    if kind >= 0:
+        led.plot_brightness(px, py, 35)
+        if kind == 1:
+            led.plot_brightness(px + 1, py, 35)
+        elif kind == 2:
+            led.plot_brightness(px, py + 1, 35)
 
 
-def new_piece():
-    """Pieces are one LED or a two-LED horizontal/vertical brick."""
-    kind = random.randrange(3)
-    if kind == 0:
-        return [(0, 0)], 2
+def lock_piece(board, kind, px, py):
+    board[py] = board[py] + 2 ** px
     if kind == 1:
-        return [(0, 0), (1, 0)], 1
-    return [(0, 0), (0, 1)], 2
-
-
-def can_place(board, piece, piece_x, piece_y):
-    for dx, dy in piece:
-        x = piece_x + dx
-        y = piece_y + dy
-        if x < 0 or x >= WIDTH or y >= HEIGHT:
-            return False
-        if y >= 0 and board[y][x]:
-            return False
-    return True
+        board[py] = board[py] + 2 ** (px + 1)
+    elif kind == 2:
+        board[py + 1] = board[py + 1] + 2 ** px
 
 
 def clear_rows(board):
-    rows = []
-    for y in range(HEIGHT):
-        if all(board[y]):
-            rows.append(y)
-
-    if not rows:
-        return 0
-
-    # Briefly brighten each completed row, then animate the rows above
-    # falling down one step at a time as the cleared space closes.
-    for y in rows:
-        for brightness in (3, 6, 9):
+    cleared = 0
+    y = HEIGHT - 1
+    while y >= 0:
+        if board[y] == FULL_ROW:
+            # Flash the full row before removing it.
             for x in range(WIDTH):
-                display.set_pixel(x, y, brightness)
-            sleep(45)
-        draw(board)
-        sleep(35)
+                led.plot_brightness(x, y, 255)
+            basic.pause(100)
+            for x in range(WIDTH):
+                led.unplot(x, y)
+            basic.pause(60)
 
-    # Remove bottom-up so the remaining original row indexes stay valid.
-    for y in reversed(rows):
-        board.pop(y)
-        board.insert(0, EMPTY_ROW[:])
-        draw(board)
-        sleep(90)
-
-    return len(rows)
-
-
-def lock_piece(board, piece, piece_x, piece_y):
-    for dx, dy in piece:
-        x = piece_x + dx
-        y = piece_y + dy
-        if y < 0:
-            return False
-        board[y][x] = 1
-    return True
+            # Collapse the rows above into the gap, showing each step.
+            row = y
+            while row > 0:
+                board[row] = board[row - 1]
+                row = row - 1
+                draw_board(board, -1, 0, 0)
+                basic.pause(90)
+            board[0] = 0
+            draw_board(board, -1, 0, 0)
+            basic.pause(90)
+            cleared = cleared + 1
+            # Check this same row again in case another full row fell into it.
+        else:
+            y = y - 1
+    return cleared
 
 
-def play_game():
-    board = [EMPTY_ROW[:] for _ in range(HEIGHT)]
-    score = 0
-    piece, piece_x = new_piece()
-    piece_y = 0
-
-    if not can_place(board, piece, piece_x, piece_y):
-        return
-
-    draw(board, piece, piece_x, piece_y)
-    last_fall = running_time()
-
-    while True:
-        moved = False
-        if button_a.was_pressed() and can_place(board, piece, piece_x - 1, piece_y):
-            piece_x -= 1
-            moved = True
-        if button_b.was_pressed() and can_place(board, piece, piece_x + 1, piece_y):
-            piece_x += 1
-            moved = True
-
-        # A shake makes the current brick drop rapidly to its landing spot.
-        if accelerometer.was_gesture("shake"):
-            while can_place(board, piece, piece_x, piece_y + 1):
-                piece_y += 1
-                draw(board, piece, piece_x, piece_y)
-                sleep(45)
-            if not lock_piece(board, piece, piece_x, piece_y):
-                return
-            score += clear_rows(board)
-            piece, piece_x = new_piece()
-            piece_y = 0
-            if not can_place(board, piece, piece_x, piece_y):
-                return
-            last_fall = running_time()
-            draw(board, piece, piece_x, piece_y)
-            continue
-
-        fall_delay = max(180, 700 - score * 30)
-        if running_time() - last_fall >= fall_delay:
-            last_fall = running_time()
-            if can_place(board, piece, piece_x, piece_y + 1):
-                piece_y += 1
-                moved = True
-            else:
-                if not lock_piece(board, piece, piece_x, piece_y):
-                    return
-                score += clear_rows(board)
-                piece, piece_x = new_piece()
-                piece_y = 0
-                if not can_place(board, piece, piece_x, piece_y):
-                    return
-                moved = True
-
-        if moved:
-            draw(board, piece, piece_x, piece_y)
-        sleep(20)
+def make_piece():
+    # 0 = one LED, 1 = two horizontal LEDs, 2 = two vertical LEDs.
+    return Math.random_range(0, 2)
 
 
 while True:
-    wait_for_start()
-    play_game()
-    display.show(Image.NO)
-    sleep(700)
+    show_start_prompt()
+    while not start_pressed():
+        basic.pause(25)
+    basic.pause(250)
+    while start_pressed():
+        basic.pause(25)
+
+    board = [0, 0, 0, 0, 0]
+    score = 0
+    kind = make_piece()
+    if kind == 1:
+        px = 1
+    else:
+        px = 2
+    py = 0
+    game_over = not can_place(board, kind, px, py)
+    last_fall = basic.running_time()
+    draw_board(board, kind, px, py)
+
+    while not game_over:
+        moved = False
+        if input.was_button_pressed(Button.A) and can_place(board, kind, px - 1, py):
+            px = px - 1
+            moved = True
+        if input.was_button_pressed(Button.B) and can_place(board, kind, px + 1, py):
+            px = px + 1
+            moved = True
+
+        if input.is_gesture(Gesture.SHAKE):
+            while can_place(board, kind, px, py + 1):
+                py = py + 1
+                draw_board(board, kind, px, py)
+                basic.pause(35)
+            lock_piece(board, kind, px, py)
+            score = score + clear_rows(board)
+            kind = make_piece()
+            if kind == 1:
+                px = 1
+            else:
+                px = 2
+            py = 0
+            game_over = not can_place(board, kind, px, py)
+            last_fall = basic.running_time()
+            draw_board(board, kind, px, py)
+        else:
+            fall_delay = 700 - score * 30
+            if fall_delay < 180:
+                fall_delay = 180
+            if basic.running_time() - last_fall >= fall_delay:
+                last_fall = basic.running_time()
+                if can_place(board, kind, px, py + 1):
+                    py = py + 1
+                    moved = True
+                else:
+                    lock_piece(board, kind, px, py)
+                    score = score + clear_rows(board)
+                    kind = make_piece()
+                    if kind == 1:
+                        px = 1
+                    else:
+                        px = 2
+                    py = 0
+                    game_over = not can_place(board, kind, px, py)
+                    moved = True
+
+        if moved and not game_over:
+            draw_board(board, kind, px, py)
+        basic.pause(20)
+
+    basic.show_leds("""
+# . . . #
+. # . # .
+. . # . .
+. # . # .
+# . . . #
+""")
+    basic.pause(700)

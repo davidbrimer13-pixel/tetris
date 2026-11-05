@@ -1,4 +1,4 @@
-# MakeCode Python version: APIs are provided by MakeCode, so no imports are used.
+# MakeCode micro:bit Python APIs (not MicroPython's microbit module).
 WIDTH = 5
 HEIGHT = 5
 FULL_ROW = 31
@@ -6,7 +6,7 @@ FULL_ROW = 31
 
 def start_pressed():
     # The touch logo is available on micro:bit V2; A+B is the V1 fallback.
-    return input.logo_is_pressed() or (button_a.is_pressed() and button_b.is_pressed())
+    return input.logo_is_pressed() or (input.button_is_pressed(Button.A) and input.button_is_pressed(Button.B))
 
 
 def show_start_prompt():
@@ -38,7 +38,7 @@ def can_place(board, kind, px, py):
 
 
 def draw_board(board, kind, px, py):
-    display.clear()
+    basic.clear_screen()
     for y in range(HEIGHT):
         for x in range(WIDTH):
             if occupied(board, x, y):
@@ -84,7 +84,7 @@ def clear_rows(board):
             draw_board(board, -1, 0, 0)
             basic.pause(90)
             cleared = cleared + 1
-            # Check this same row again in case another full row fell into it.
+            # Recheck this row in case another full row fell into it.
         else:
             y = y - 1
     return cleared
@@ -112,17 +112,23 @@ while True:
         px = 2
     py = 0
     game_over = not can_place(board, kind, px, py)
-    last_fall = running_time()
+    last_fall = control.millis()
+    previous_a = input.button_is_pressed(Button.A)
+    previous_b = input.button_is_pressed(Button.B)
     draw_board(board, kind, px, py)
 
     while not game_over:
         moved = False
-        if button_a.was_pressed() and can_place(board, kind, px - 1, py):
+        a_down = input.button_is_pressed(Button.A)
+        b_down = input.button_is_pressed(Button.B)
+        if a_down and not previous_a and can_place(board, kind, px - 1, py):
             px = px - 1
             moved = True
-        if button_b.was_pressed() and can_place(board, kind, px + 1, py):
+        if b_down and not previous_b and can_place(board, kind, px + 1, py):
             px = px + 1
             moved = True
+        previous_a = a_down
+        previous_b = b_down
 
         if input.is_gesture(Gesture.SHAKE):
             while can_place(board, kind, px, py + 1):
@@ -138,14 +144,14 @@ while True:
                 px = 2
             py = 0
             game_over = not can_place(board, kind, px, py)
-            last_fall = running_time()
+            last_fall = control.millis()
             draw_board(board, kind, px, py)
         else:
             fall_delay = 700 - score * 30
             if fall_delay < 180:
                 fall_delay = 180
-            if running_time() - last_fall >= fall_delay:
-                last_fall = running_time()
+            if control.millis() - last_fall >= fall_delay:
+                last_fall = control.millis()
                 if can_place(board, kind, px, py + 1):
                     py = py + 1
                     moved = True

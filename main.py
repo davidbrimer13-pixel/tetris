@@ -1,7 +1,18 @@
-# MakeCode micro:bit Python APIs (not MicroPython's microbit module).
+# MakeCode micro:bit Python Tetris.
+# The board is stored as one integer bit field rather than a Python list;
+# this avoids the unsupported list-index operation that caused the runtime crash.
 WIDTH = 5
 HEIGHT = 5
 FULL_ROW = 31
+
+
+def bit_value(index):
+    value = 1
+    count = 0
+    while count < index:
+        value = value * 2
+        count = count + 1
+    return value
 
 
 def start_pressed():
@@ -24,7 +35,8 @@ def occupied(board, x, y):
         return True
     if y < 0:
         return False
-    return (board[y] // (2 ** x)) % 2 == 1
+    index = y * WIDTH + x
+    return (board // bit_value(index)) % 2 == 1
 
 
 def can_place(board, kind, px, py):
@@ -53,41 +65,64 @@ def draw_board(board, kind, px, py):
 
 
 def lock_piece(board, kind, px, py):
-    board[py] = board[py] + 2 ** px
+    board = board + bit_value(py * WIDTH + px)
     if kind == 1:
-        board[py] = board[py] + 2 ** (px + 1)
+        board = board + bit_value(py * WIDTH + px + 1)
     elif kind == 2:
-        board[py + 1] = board[py + 1] + 2 ** px
+        board = board + bit_value((py + 1) * WIDTH + px)
+    return board
+
+
+def row_is_full(board, y):
+    x = 0
+    while x < WIDTH:
+        if not occupied(board, x, y):
+            return False
+        x = x + 1
+    return True
+
+
+def clear_one_row(board, clear_y):
+    # Repack every other row toward the bottom. Rows below the cleared row
+    # stay in place, while rows above it fall down into the gap.
+    result = 0
+    dest_y = HEIGHT - 1
+    source_y = HEIGHT - 1
+    while source_y >= 0:
+        if source_y != clear_y:
+            x = 0
+            while x < WIDTH:
+                if occupied(board, x, source_y):
+                    result = result + bit_value(dest_y * WIDTH + x)
+                x = x + 1
+            dest_y = dest_y - 1
+        source_y = source_y - 1
+    return result
 
 
 def clear_rows(board):
-    cleared = 0
     y = HEIGHT - 1
     while y >= 0:
-        if board[y] == FULL_ROW:
+        if row_is_full(board, y):
             # Flash the full row before removing it.
-            for x in range(WIDTH):
+            x = 0
+            while x < WIDTH:
                 led.plot_brightness(x, y, 255)
+                x = x + 1
             basic.pause(100)
-            for x in range(WIDTH):
+            x = 0
+            while x < WIDTH:
                 led.unplot(x, y)
+                x = x + 1
             basic.pause(60)
 
-            # Collapse the rows above into the gap, showing each step.
-            row = y
-            while row > 0:
-                board[row] = board[row - 1]
-                row = row - 1
-                draw_board(board, -1, 0, 0)
-                basic.pause(90)
-            board[0] = 0
+            board = clear_one_row(board, y)
             draw_board(board, -1, 0, 0)
-            basic.pause(90)
-            cleared = cleared + 1
-            # Recheck this row in case another full row fell into it.
+            basic.pause(120)
+            # Recheck this row in case another complete row moved into it.
         else:
             y = y - 1
-    return cleared
+    return board
 
 
 def make_piece():
@@ -103,8 +138,7 @@ while True:
     while start_pressed():
         basic.pause(25)
 
-    board = [0, 0, 0, 0, 0]
-    score = 0
+    board = 0
     kind = make_piece()
     if kind == 1:
         px = 1
@@ -135,8 +169,8 @@ while True:
                 py = py + 1
                 draw_board(board, kind, px, py)
                 basic.pause(35)
-            lock_piece(board, kind, px, py)
-            score = score + clear_rows(board)
+            board = lock_piece(board, kind, px, py)
+            board = clear_rows(board)
             kind = make_piece()
             if kind == 1:
                 px = 1
@@ -147,17 +181,14 @@ while True:
             last_fall = control.millis()
             draw_board(board, kind, px, py)
         else:
-            fall_delay = 700 - score * 30
-            if fall_delay < 180:
-                fall_delay = 180
-            if control.millis() - last_fall >= fall_delay:
+            if control.millis() - last_fall >= 700:
                 last_fall = control.millis()
                 if can_place(board, kind, px, py + 1):
                     py = py + 1
                     moved = True
                 else:
-                    lock_piece(board, kind, px, py)
-                    score = score + clear_rows(board)
+                    board = lock_piece(board, kind, px, py)
+                    board = clear_rows(board)
                     kind = make_piece()
                     if kind == 1:
                         px = 1

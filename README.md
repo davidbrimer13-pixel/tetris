@@ -1,24 +1,6 @@
 
-> Åbn denne side på [https://davidbrimer13-pixel.github.io/tetris/](https://davidbrimer13-pixel.github.io/tetris/)
+## Micro:bit Python Tetris
 
-## Brug som udvidelse
+The Python program in `main.py` is a compact Tetris-style game for the micro:bit's 5×5 LED display. Touch the logo on a micro:bit V2 to start (on V1, press A+B together). Button A moves the brick left, B moves it right, and shaking the micro:bit makes the current brick drop quickly. Pieces are made from one or two LEDs. Completed rows flash, clear, and the LEDs above them animate downward. The moving brick is dim (brightness 1); landed bricks are brightness 2.
 
-Dette lager kan blive tilføjet som en **udvidelse** i MakeCode.
-
-* åbn [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* klik på **Nyt projekt**
-* Klik på **Udvidelser** under tandhjulsmenuen
-* søg efter **https://github.com/davidbrimer13-pixel/tetris**, og importer
-
-## Rediger dette projekt
-
-Sådan redigerer du dette lager i MakeCode.
-
-* åbn [https://makecode.microbit.org/](https://makecode.microbit.org/)
-* klik på **Importer**, og klik derefter på **Import-URL-adresse**
-* indsæt **https://github.com/davidbrimer13-pixel/tetris**, og klik på Importer
-
-#### Metadata (bruges til søgning, gengivelse)
-
-* for PXT/microbit
-<script src="https://makecode.com/gh-pages-embed.js"></script><script>makeCodeRender("{{ site.makecode.home_url }}", "{{ site.github.owner_name }}/{{ site.github.repository_name }}");</script>
+After a game ends, touch the logo (or press A+B on V1) to play again.

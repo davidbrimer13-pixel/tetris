@@ -5,8 +5,8 @@ FULL_ROW = 31
 
 
 def start_pressed():
-    # The touch logo is available on micro:bit V2. A+B is the V1 fallback.
-    return input.logo_is_pressed() or (input.button_is_pressed(Button.A) and input.button_is_pressed(Button.B))
+    # The touch logo is available on micro:bit V2; A+B is the V1 fallback.
+    return input.logo_is_pressed() or (button_a.is_pressed() and button_b.is_pressed())
 
 
 def show_start_prompt():
@@ -38,7 +38,7 @@ def can_place(board, kind, px, py):
 
 
 def draw_board(board, kind, px, py):
-    led.clear()
+    display.clear()
     for y in range(HEIGHT):
         for x in range(WIDTH):
             if occupied(board, x, y):
@@ -112,15 +112,15 @@ while True:
         px = 2
     py = 0
     game_over = not can_place(board, kind, px, py)
-    last_fall = basic.running_time()
+    last_fall = running_time()
     draw_board(board, kind, px, py)
 
     while not game_over:
         moved = False
-        if input.was_button_pressed(Button.A) and can_place(board, kind, px - 1, py):
+        if button_a.was_pressed() and can_place(board, kind, px - 1, py):
             px = px - 1
             moved = True
-        if input.was_button_pressed(Button.B) and can_place(board, kind, px + 1, py):
+        if button_b.was_pressed() and can_place(board, kind, px + 1, py):
             px = px + 1
             moved = True
 
@@ -138,14 +138,14 @@ while True:
                 px = 2
             py = 0
             game_over = not can_place(board, kind, px, py)
-            last_fall = basic.running_time()
+            last_fall = running_time()
             draw_board(board, kind, px, py)
         else:
             fall_delay = 700 - score * 30
             if fall_delay < 180:
                 fall_delay = 180
-            if basic.running_time() - last_fall >= fall_delay:
-                last_fall = basic.running_time()
+            if running_time() - last_fall >= fall_delay:
+                last_fall = running_time()
                 if can_place(board, kind, px, py + 1):
                     py = py + 1
                     moved = True
